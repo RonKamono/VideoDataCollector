@@ -44,11 +44,13 @@ def save_to_sheet(data: dict):
             return "Youtube shorts"
         if platform == "TikTok":
             return "TikTok"
+        if platform == "Instagram":
+            return "Instagram"
         return ""
 
     values = [
         data["video_url"],        # B
-        platform_value(data["platform"], data["type"]),  # C ← ВАЖНО
+        platform_value(data["platform"], data["type"]),
         data["channel_handle"],   # D
         data["channel_url"],      # E
         data["subscribers"],      # F
@@ -68,8 +70,6 @@ def save_to_sheet(data: dict):
 
     print(f"✅ Записано в строку {target_row}")
 
-
-
 def pretty_print(data: dict):
     print("\n" + "=" * 50)
     print(f"🔗 Видео:            {data['video_url']}")
@@ -87,7 +87,6 @@ def pretty_print(data: dict):
     print(f"👍 Лайки:            {data['likes']}")
     print(f"🔁 Репосты:          {data['reposts']}")
     print("=" * 50 + "\n")
-
 
 # ================== YOUTUBE ==================
 class YouTube:
@@ -298,6 +297,47 @@ class Instagram:
         return result
 
     # ---------- VIDEO ----------
+    def get_reel_views_from_profile(self, username: str, shortcode: str) -> int | None:
+        url = f"https://www.instagram.com/{username}/"
+        r = self.session.get(url, timeout=10)
+        r.raise_for_status()
+        html = r.text
+
+        # 1. Достаём JSON из script
+        m = re.search(
+            r'<script type="application/json".*?>(\{.*?\})</script>',
+            html,
+            re.DOTALL
+        )
+        if not m:
+            return None
+
+        try:
+            data = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            return None
+
+        # 2. Ищем reels в GraphQL
+        try:
+            edges = (
+                data["entry_data"]["ProfilePage"][0]
+                ["graphql"]["user"]
+                ["edge_owner_to_timeline_media"]["edges"]
+            )
+        except (KeyError, IndexError):
+            return None
+
+        # 3. Ищем нужный shortcode
+        for edge in edges:
+            node = edge.get("node", {})
+            if node.get("shortcode") == shortcode:
+                return (
+                        node.get("video_view_count")
+                        or node.get("edge_play_count", {}).get("count")
+                )
+
+        return None
+
     def collect(self, url):
         try:
             info = self.ydl.extract_info(url, download=False)
@@ -313,11 +353,15 @@ class Instagram:
         profile_url = f"https://www.instagram.com/{username}/"
         profile = self.get_instagram_profile_info(profile_url)
 
+        shortcode = info.get("id")
+
+        profile_views = self.get_reel_views_from_profile(username, shortcode)
+
         views = (
-            info.get("view_count")
-            or info.get("play_count")
-            or info.get("statistics", {}).get("play_count")
-            or 0
+                info.get("view_count")
+                or info.get("play_count")
+                or profile_views
+                or 0
         )
 
         data = {
@@ -332,9 +376,8 @@ class Instagram:
             "views": views,
             "comments": info.get("comment_count"),
             "likes": info.get("like_count"),
-            "reposts": None,
+            "reposts": profile.get('reposts')
         }
-
         pretty_print(data)
         save_to_sheet(data)
 
