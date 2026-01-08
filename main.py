@@ -179,6 +179,14 @@ class TikTok:
 
         profile = self.get_profile_info(info["uploader_url"])
 
+        reposts = None
+        if info:
+            reposts = (
+                info.get("repost_count")
+                if info.get("repost_count") is not None
+                else info.get("share_count")
+            )
+
         data = {
             "platform": "TikTok",
             "type": "TikTok Video",
@@ -191,7 +199,140 @@ class TikTok:
             "views": info.get("view_count", 0),
             "comments": info.get("comment_count", 0),
             "likes": info.get("like_count", 0),
-            "reposts": info.get("share_count", 0),
+            "reposts": reposts
+        }
+
+        pretty_print(data)
+        save_to_sheet(data)
+
+
+# ================== INSTAGRAM ==================
+class Instagram:
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0"
+        })
+        self.ydl = self._build_ydl()
+
+    def _build_ydl(self):
+        try:
+            return yt_dlp.YoutubeDL({
+                "quiet": True,
+                "skip_download": True,
+                "simulate": True,
+                "no_warnings": True,
+                "cookiesfrombrowser": ("firefox",),
+            })
+        except Exception:
+            return yt_dlp.YoutubeDL({
+                "quiet": True,
+                "skip_download": True,
+                "simulate": True,
+                "no_warnings": True,
+            })
+
+    def format_date(self, ts):
+        return datetime.fromtimestamp(ts).strftime("%d/%m/%Y") if ts else None
+
+    # ---------- NUMBER PARSER ----------
+    def parse_num(self, s):
+        if not s:
+            return None
+
+        s = s.strip().lower()
+        if not s:
+            return None
+
+        s = s.replace(" ", "").replace(",", "")
+
+        try:
+            if "тыс" in s:
+                return int(float(s.replace("тыс.", "").replace("тыс", "")) * 1_000)
+            if "млн" in s:
+                return int(float(s.replace("млн", "")) * 1_000_000)
+            if s.endswith("k"):
+                return int(float(s[:-1]) * 1_000)
+            if s.endswith("m"):
+                return int(float(s[:-1]) * 1_000_000)
+            return int(float(s))
+        except ValueError:
+            return None
+
+    # ---------- PROFILE ----------
+    def get_instagram_profile_info(self, profile_url: str) -> dict:
+        r = self.session.get(profile_url, timeout=10)
+        r.raise_for_status()
+        html = r.text
+
+        result = {
+            "subscribers": None,
+            "count_video": None
+        }
+
+        m = re.search(
+            r'<meta property="og:description" content="([^"]+)"',
+            html
+        )
+        if not m:
+            return result
+
+        text = m.group(1)
+
+        sub = re.search(
+            r'([\d\.,\s]+)\s*(Followers|подписчик[а-я]*)',
+            text,
+            re.I
+        )
+        posts = re.search(
+            r'([\d\.,\s]+)\s*(Posts|публикац[а-я]*)',
+            text,
+            re.I
+        )
+
+        if sub and sub.group(1):
+            result["subscribers"] = self.parse_num(sub.group(1))
+        if posts and posts.group(1):
+            result["count_video"] = self.parse_num(posts.group(1))
+
+        return result
+
+    # ---------- VIDEO ----------
+    def collect(self, url):
+        try:
+            info = self.ydl.extract_info(url, download=False)
+        except Exception:
+            print("❌ Instagram видео недоступно")
+            return
+
+        username = info.get("channel") or info.get("uploader")
+        if not username:
+            print("❌ Не удалось определить Instagram username")
+            return
+
+        profile_url = f"https://www.instagram.com/{username}/"
+        profile = self.get_instagram_profile_info(profile_url)
+
+        views = (
+            info.get("view_count")
+            or info.get("play_count")
+            or info.get("statistics", {}).get("play_count")
+            or 0
+        )
+
+        data = {
+            "platform": "Instagram",
+            "type": "Instagram",
+            "video_url": info.get("webpage_url"),
+            "channel_handle": f"@{username}",
+            "channel_url": profile_url,
+            "subscribers": profile.get("subscribers"),
+            "count_video": profile.get("count_video"),
+            "publish_date": self.format_date(info.get("timestamp")),
+            "views": views,
+            "comments": info.get("comment_count"),
+            "likes": info.get("like_count"),
+            "reposts": None,
         }
 
         pretty_print(data)
@@ -209,14 +350,11 @@ def content_url(url: str):
         YouTube().collect(url)
     elif "tiktok.com" in domain:
         TikTok().collect(url)
-    else:
-        print("Платформа не поддерживается")
+    elif "instagram.com" in domain:
+        Instagram().collect(url)
 
     print(f"⏱ Время выполнения: {time.perf_counter() - start:.2f} сек\n")
 
 
 while True:
     content_url(input('URL: '))
-    sh = gc.open_by_key(SPREADSHEET_ID)
-    print([ws.title for ws in sh.worksheets()])
-
