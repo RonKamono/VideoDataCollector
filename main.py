@@ -21,18 +21,17 @@ sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
 
 
 def save_to_sheet(data: dict):
-    col_a = sheet.col_values(1)  # №
-    col_b = sheet.col_values(2)  # Ссылка на видео
+    col_a = sheet.col_values(1)  
+    col_b = sheet.col_values(2)  
 
     target_row = None
 
-    # начинаем с 2 строки (после шапки)
     for i in range(1, max(len(col_a), len(col_b))):
         a_val = col_a[i] if i < len(col_a) else ""
         b_val = col_b[i] if i < len(col_b) else ""
 
         if a_val and not b_val:
-            target_row = i + 1  # +1 потому что индексы с 0
+            target_row = i + 1 
             break
 
     if not target_row:
@@ -49,17 +48,17 @@ def save_to_sheet(data: dict):
         return ""
 
     values = [
-        data["video_url"],        # B
+        data["video_url"],        
         platform_value(data["platform"], data["type"]),
-        data["channel_handle"],   # D
-        data["channel_url"],      # E
-        data["subscribers"],      # F
-        data["count_video"],      # G
-        data["publish_date"],     # H
-        data["views"],            # I
-        data["comments"],         # J
-        data["likes"],            # K
-        data["reposts"],          # L
+        data["channel_handle"],   
+        data["channel_url"],      
+        data["subscribers"],      
+        data["count_video"],      
+        data["publish_date"],     
+        data["views"],            
+        data["comments"],         
+        data["likes"],            
+        data["reposts"],          
     ]
 
     sheet.update(
@@ -303,7 +302,6 @@ class Instagram:
         r.raise_for_status()
         html = r.text
 
-        # 1. Достаём JSON из script
         m = re.search(
             r'<script type="application/json".*?>(\{.*?\})</script>',
             html,
@@ -317,7 +315,6 @@ class Instagram:
         except json.JSONDecodeError:
             return None
 
-        # 2. Ищем reels в GraphQL
         try:
             edges = (
                 data["entry_data"]["ProfilePage"][0]
@@ -327,7 +324,6 @@ class Instagram:
         except (KeyError, IndexError):
             return None
 
-        # 3. Ищем нужный shortcode
         for edge in edges:
             node = edge.get("node", {})
             if node.get("shortcode") == shortcode:
