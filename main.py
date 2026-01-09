@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 
 # ================== GOOGLE SHEETS ==================
 SERVICE_ACCOUNT_FILE = "service_account.json"
-SPREADSHEET_ID = "19bHwNqlLUTsdNVAz8SP5GZmY_dC6NuTlOusRnLFcjxg"
+SPREADSHEET_ID = None # add SPREADSHEET_ID
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 creds = Credentials.from_service_account_file(
@@ -399,5 +399,6 @@ def content_url(url: str):
     print(f"⏱ Время выполнения: {time.perf_counter() - start:.2f} сек\n")
 
 
-while True:
-    content_url(input('URL: '))
+if __name__ == '__main__':
+       content_url(input('URL: '))
+ 
