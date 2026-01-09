@@ -1,4 +1,10 @@
-**Data collector** - Сбор данных о видео и канале | YouTube | TikTok | Instagram
+**Data collector** - Сбор данных о видео и канале | YouTube | TikTok | Instagram | 
 
+Python | YtDlp
 
-Зависимости - Google API 
+Зависимости - Google API | Cookie - Instagram Account / Нужна авторизация в браузере "Реализованно через Firefox" 
+
+- Future 
+
+Add Gui
+Add full auto instagram
