@@ -5,12 +5,13 @@ import json
 import time
 from datetime import datetime
 from urllib.parse import urlparse
+import browser_cookie3
 import gspread
 from google.oauth2.service_account import Credentials
 
 # ================== GOOGLE SHEETS ==================
 SERVICE_ACCOUNT_FILE = "service_account.json"
-SPREADSHEET_ID = None # add SPREADSHEET_ID
+SPREADSHEET_ID = "19bHwNqlLUTsdNVAz8SP5GZmY_dC6NuTlOusRnLFcjxg"
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 creds = Credentials.from_service_account_file(
@@ -21,8 +22,8 @@ sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
 
 
 def save_to_sheet(data: dict):
-    col_a = sheet.col_values(1)  
-    col_b = sheet.col_values(2)  
+    col_a = sheet.col_values(1)
+    col_b = sheet.col_values(2)
 
     target_row = None
 
@@ -31,7 +32,7 @@ def save_to_sheet(data: dict):
         b_val = col_b[i] if i < len(col_b) else ""
 
         if a_val and not b_val:
-            target_row = i + 1 
+            target_row = i + 1
             break
 
     if not target_row:
@@ -48,17 +49,17 @@ def save_to_sheet(data: dict):
         return ""
 
     values = [
-        data["video_url"],        
+        data["video_url"],
         platform_value(data["platform"], data["type"]),
-        data["channel_handle"],   
-        data["channel_url"],      
-        data["subscribers"],      
-        data["count_video"],      
-        data["publish_date"],     
-        data["views"],            
-        data["comments"],         
-        data["likes"],            
-        data["reposts"],          
+        data["channel_handle"],
+        data["channel_url"],
+        data["subscribers"],
+        data["count_video"],
+        data["publish_date"],
+        data["views"],
+        data["comments"],
+        data["likes"],
+        data["reposts"],
     ]
 
     sheet.update(
@@ -69,23 +70,25 @@ def save_to_sheet(data: dict):
 
     print(f"✅ Записано в строку {target_row}")
 
+
 def pretty_print(data: dict):
     print("\n" + "=" * 50)
-    print(f"🔗 Видео:            {data['video_url']}")
-    print(f"📹 Тип:              {data['type']}")
-    print(f"🌍 Платформа:        {data['platform']}")
+    print(f"Видео:             {data['video_url']}")
+    print(f"Тип:               {data['type']}")
+    print(f"Платформа:         {data['platform']}")
     print("-" * 50)
-    print(f"👤 Канал:            {data['channel_handle']}")
-    print(f"🌐 URL канала:       {data['channel_url']}")
-    print(f"👥 Подписчики:       {data['subscribers']}")
-    print(f"🎬 Видео всего:      {data['count_video']}")
+    print(f"Канал:             {data['channel_handle']}")
+    print(f"URL канала:        {data['channel_url']}")
+    print(f"Подписчики:        {data['subscribers']}")
+    print(f"Видео всего:       {data['count_video']}")
     print("-" * 50)
-    print(f"📅 Дата публикации:  {data['publish_date']}")
-    print(f"👁 Просмотры:        {data['views']}")
-    print(f"💬 Комментарии:      {data['comments']}")
-    print(f"👍 Лайки:            {data['likes']}")
-    print(f"🔁 Репосты:          {data['reposts']}")
+    print(f"Дата публикации:   {data['publish_date']}")
+    print(f"Просмотры:         {data['views']}")
+    print(f"Комментарии:       {data['comments']}")
+    print(f"Лайки:             {data['likes']}")
+    print(f"Репосты:           {data['reposts']}")
     print("=" * 50 + "\n")
+
 
 # ================== YOUTUBE ==================
 class YouTube:
@@ -142,7 +145,7 @@ class YouTube:
         }
 
         pretty_print(data)
-        save_to_sheet(data)
+        # save_to_sheet(data)
 
 
 # ================== TIKTOK ==================
@@ -201,139 +204,144 @@ class TikTok:
         }
 
         pretty_print(data)
-        save_to_sheet(data)
+        # save_to_sheet(data)
 
 
 # ================== INSTAGRAM ==================
 class Instagram:
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0"
-        })
+        self.session = self._build_session_with_cookies()
         self.ydl = self._build_ydl()
 
-    def _build_ydl(self):
+    # -------- SESSION WITH INSTAGRAM COOKIES --------
+    def _build_session_with_cookies(self):
+        s = requests.Session()
+        s.headers.update({
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en-US,en;q=0.9",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": "https://www.instagram.com/"
+        })
+
         try:
-            return yt_dlp.YoutubeDL({
-                "quiet": True,
-                "skip_download": True,
-                "simulate": True,
-                "no_warnings": True,
-                "cookiesfrombrowser": ("firefox",),
-            })
-        except Exception:
-            return yt_dlp.YoutubeDL({
-                "quiet": True,
-                "skip_download": True,
-                "simulate": True,
-                "no_warnings": True,
-            })
+            cookiejar = browser_cookie3.firefox(domain_name="instagram.com")
+
+            # Загружаем cookies в requests
+            s.cookies.update(cookiejar)
+
+            # Извлекаем csrftoken
+            csrf = None
+            for c in cookiejar:
+                if c.name == "csrftoken":
+                    csrf = c.value
+                    break
+
+            if not csrf:
+                raise Exception("csrftoken not found in cookies")
+
+            s.headers["X-CSRFToken"] = csrf
+            s.headers["X-IG-App-ID"] = "936619743392459"
+
+            print("✅ Instagram cookies + CSRF загружены")
+
+        except Exception as e:
+            print("❌ Cookies error:", e)
+
+        return s
+
+    # -------- YT-DLP --------
+    def _build_ydl(self):
+        return yt_dlp.YoutubeDL({
+            "quiet": True,
+            "skip_download": True,
+            "simulate": True,
+            "no_warnings": True,
+            "cookiesfrombrowser": ("firefox",),
+        })
 
     def format_date(self, ts):
         return datetime.fromtimestamp(ts).strftime("%d/%m/%Y") if ts else None
 
-    # ---------- NUMBER PARSER ----------
-    def parse_num(self, s):
-        if not s:
-            return None
+    # -------- PROFILE  --------
+    def shortcode_to_media_id(self, shortcode: str) -> str:
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        media_id = 0
+        for c in shortcode:
+            media_id = media_id * 64 + alphabet.index(c)
+        return str(media_id)
 
-        s = s.strip().lower()
-        if not s:
-            return None
+    def get_instagram_profile_info(self, username: str):
+        url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={username}"
 
-        s = s.replace(" ", "").replace(",", "")
-
-        try:
-            if "тыс" in s:
-                return int(float(s.replace("тыс.", "").replace("тыс", "")) * 1_000)
-            if "млн" in s:
-                return int(float(s.replace("млн", "")) * 1_000_000)
-            if s.endswith("k"):
-                return int(float(s[:-1]) * 1_000)
-            if s.endswith("m"):
-                return int(float(s[:-1]) * 1_000_000)
-            return int(float(s))
-        except ValueError:
-            return None
-
-    # ---------- PROFILE ----------
-    def get_instagram_profile_info(self, profile_url: str) -> dict:
-        r = self.session.get(profile_url, timeout=10)
-        r.raise_for_status()
-        html = r.text
-
-        result = {
-            "subscribers": None,
-            "count_video": None
-        }
-
-        m = re.search(
-            r'<meta property="og:description" content="([^"]+)"',
-            html
-        )
-        if not m:
-            return result
-
-        text = m.group(1)
-
-        sub = re.search(
-            r'([\d\.,\s]+)\s*(Followers|подписчик[а-я]*)',
-            text,
-            re.I
-        )
-        posts = re.search(
-            r'([\d\.,\s]+)\s*(Posts|публикац[а-я]*)',
-            text,
-            re.I
-        )
-
-        if sub and sub.group(1):
-            result["subscribers"] = self.parse_num(sub.group(1))
-        if posts and posts.group(1):
-            result["count_video"] = self.parse_num(posts.group(1))
-
-        return result
-
-    # ---------- VIDEO ----------
-    def get_reel_views_from_profile(self, username: str, shortcode: str) -> int | None:
-        url = f"https://www.instagram.com/{username}/"
         r = self.session.get(url, timeout=10)
         r.raise_for_status()
-        html = r.text
+        data = r.json()
 
-        m = re.search(
-            r'<script type="application/json".*?>(\{.*?\})</script>',
-            html,
-            re.DOTALL
+        user = data["data"]["user"]
+
+        return {
+            "subscribers": user["edge_followed_by"]["count"],
+            "count_video": user["edge_owner_to_timeline_media"]["count"]
+        }
+
+    def get_reel_views(self, media_id: str) -> int | None:
+        if not media_id:
+            return None
+
+        url = f"https://www.instagram.com/api/v1/media/{media_id}/info/"
+
+        r = self.session.get(url, timeout=10)
+        if r.status_code != 200:
+            return None
+
+        data = r.json()
+        items = data.get("items", [])
+        if not items:
+            return None
+
+        item = items[0]
+
+        return (
+                item.get("play_count")
+                or item.get("view_count")
+                or None
         )
-        if not m:
-            return None
+
+    def debug_media_info(self, media_id: str):
+        url = f"https://www.instagram.com/api/v1/media/{media_id}/info/"
+
+        r = self.session.get(url, timeout=10)
+
+        print("\n=== MEDIA INFO DEBUG ===")
+        print("URL:", url)
+        print("Status:", r.status_code)
 
         try:
-            data = json.loads(m.group(1))
-        except json.JSONDecodeError:
+            data = r.json()
+            print(json.dumps(data, indent=2))
+        except:
+            print("RAW TEXT:")
+            print(r.text)
+
+        print("=======================\n")
+
+    def get_repost_count(self, media_id: str):
+        url = f"https://www.instagram.com/api/v1/media/{media_id}/info/"
+
+        r = self.session.get(url, timeout=10)
+        if r.status_code != 200:
             return None
 
-        try:
-            edges = (
-                data["entry_data"]["ProfilePage"][0]
-                ["graphql"]["user"]
-                ["edge_owner_to_timeline_media"]["edges"]
-            )
-        except (KeyError, IndexError):
+        data = r.json()
+        items = data.get("items", [])
+        if not items:
             return None
 
-        for edge in edges:
-            node = edge.get("node", {})
-            if node.get("shortcode") == shortcode:
-                return (
-                        node.get("video_view_count")
-                        or node.get("edge_play_count", {}).get("count")
-                )
+        item = items[0]
 
-        return None
+        return item.get("media_repost_count")
 
+    # -------- VIDEO --------
     def collect(self, url):
         try:
             info = self.ydl.extract_info(url, download=False)
@@ -343,39 +351,36 @@ class Instagram:
 
         username = info.get("channel") or info.get("uploader")
         if not username:
-            print("❌ Не удалось определить Instagram username")
+            print("❌ Не удалось определить username")
             return
 
         profile_url = f"https://www.instagram.com/{username}/"
-        profile = self.get_instagram_profile_info(profile_url)
+        profile = self.get_instagram_profile_info(username)
 
         shortcode = info.get("id")
+        media_id = self.shortcode_to_media_id(shortcode)
 
-        profile_views = self.get_reel_views_from_profile(username, shortcode)
+        views = self.get_reel_views(media_id)
+        reposts = self.get_repost_count(media_id)
 
-        views = (
-                info.get("view_count")
-                or info.get("play_count")
-                or profile_views
-                or 0
-        )
 
         data = {
             "platform": "Instagram",
-            "type": "Instagram",
+            "type": "Instagram Reel",
             "video_url": info.get("webpage_url"),
             "channel_handle": f"@{username}",
             "channel_url": profile_url,
-            "subscribers": profile.get("subscribers"),
-            "count_video": profile.get("count_video"),
+            "subscribers": profile["subscribers"],
+            "count_video": profile["count_video"],
             "publish_date": self.format_date(info.get("timestamp")),
             "views": views,
             "comments": info.get("comment_count"),
             "likes": info.get("like_count"),
-            "reposts": profile.get('reposts')
+            "reposts": reposts
         }
+
         pretty_print(data)
-        save_to_sheet(data)
+        # save_to_sheet(data)
 
 
 # ================== ROUTER ==================
@@ -396,5 +401,5 @@ def content_url(url: str):
 
 
 if __name__ == '__main__':
-       content_url(input('URL: '))
- 
+    while True:
+        content_url(input('URL: '))
