@@ -8,5 +8,5 @@ Python | YtDlp
 
 Add full auto instagram
 
-
-Google Cloud Console → IAM → Service Accounts → Keys → Create
+Для работы нужен API GOOGLE что бы его получить
+Google Cloud Console → IAM → Service Accounts → Keys → Create → Save Json
